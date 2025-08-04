@@ -1,0 +1,185 @@
+
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Kreiranje računa</title>
+  <style>
+    :root {
+      --dark: #121b27;
+      --black: #000000;
+      --purple: #3d0fd9;
+      --light-purple: #d2c4ff;
+      --very-light-purple: #e8e5f3;
+      --bg: #121b27;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: var(--bg);
+      color: white;
+      font-family: sans-serif;
+    }
+    .container {
+      max-width: 800px;
+      margin:auto;
+      padding: 2rem;
+    }
+    h1 {
+      color: var(--light-purple);
+      text-align:center;
+      margin-bottom:2rem;
+    }
+    label {
+      display:block;
+      margin-top:1.5rem;
+      margin-bottom:0.25rem;
+      font-weight: 500;
+      color: var(--very-light-purple);
+    }
+    input, select {
+      width: 100%;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid #000000;
+      color: white;
+      font-size: 1rem;
+      padding: 0.5rem 0;
+      transition: border-color 0.3s;
+    }
+    input:focus, select:focus {
+      outline:none;
+      border-bottom: 2px solid var(--light-purple);
+    }
+    .row {
+      display: flex;
+      gap: 1rem;
+    }
+    .row > div {
+      flex:1;
+    }
+    .stavke {
+      margin-top:2rem;
+    }
+    .stavka {
+      padding: 1rem 0;
+      border-bottom: 1px dashed var(--very-light-purple);
+    }
+    button {
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      font-size:1rem;
+      margin-top: 2rem;
+      border-radius: 8px;
+      cursor: pointer;
+      display:inline-block;
+    }
+    .button_primary {
+      background-color: var(--light-purple);
+      color: #000000;
+    }
+    .button_secondary {
+      border:1px solid var(--purple);
+      background-color: var(--dark);
+    }
+    @media (max-width: 600px) {
+      .row {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Kreiranje računa</h1>
+    <form method="POST" action="/">
+      <label for="vrsta">Vrsta računa</label>
+      <select id="vrsta" name="vrsta">
+        <option value="obican">Običan račun</option>
+        <option value="r1">R1 račun</option>
+      </select>
+
+      <label for="broj">Broj računa (format: 1/2/2)</label>
+      <input type="text" id="broj" name="broj" readonly />
+
+      <div class="row">
+        <div>
+          <label for="datum">Datum</label>
+          <input type="date" id="datum" name="datum" readonly />
+        </div>
+        <div>
+          <label for="vrijeme">Vrijeme</label>
+          <input type="time" id="vrijeme" name="vrijeme" readonly />
+        </div>
+        <div>
+          <label for="rok">Rok plaćanja</label>
+          <input type="date" id="rok" name="rok" readonly />
+        </div>
+      </div>
+
+      <h2 style="margin-top:2rem; color: var(--light-purple);">Podaci o kupcu</h2>
+      <label for="kupac">Naziv / Ime i prezime</label>
+      <input type="text" id="kupac" name="kupac" required />
+
+      <label for="oib">OIB</label>
+      <input type="text" id="oib" name="oib" />
+
+      <label for="adresa">Adresa</label>
+      <input type="text" id="adresa" name="adresa" />
+
+      <div class="row">
+        <div>
+          <label for="posta">Poštanski broj</label>
+          <input type="text" id="posta" name="posta" />
+        </div>
+        <div>
+          <label for="grad">Grad</label>
+          <input type="text" id="grad" name="grad" />
+        </div>
+      </div>
+
+      <div class="stavke">
+        <h2 style="color: var(--light-purple);">Stavke</h2>
+        <div id="stavke-lista">
+          <!-- Stavke će se dodavati ovdje -->
+        </div>
+        <button class="button_secondary" type="button" onclick="dodajStavku()">+ Dodaj stavku</button>
+      </div>
+
+      <button class="button_primary" type="submit">Kreiraj račun</button>
+    </form>
+  </div>
+
+<script>
+  function dodajStavku() {
+    const div = document.createElement("div");
+    div.className = "stavka";
+    div.innerHTML = `
+      <label>Naziv stavke</label>
+      <input type="text" name="naziv[]" required>
+      <label>Količina</label>
+      <input type="number" name="kolicina[]" step="any" required>
+      <label>Jedinična cijena</label>
+      <input type="number" name="cijena[]" step="any" required>
+    `;
+    document.getElementById("stavke-lista").appendChild(div);
+  }
+
+  window.onload = () => {
+    dodajStavku();
+
+    // Fill readonly fields automatically by fetching from server
+    fetch('/invoice_meta')
+      .then(res => res.json())
+      .then(data => {
+        document.getElementById('broj').value = data.invoice_number;
+        document.getElementById('datum').value = data.invoice_date;
+        document.getElementById('vrijeme').value = data.invoice_time;
+        document.getElementById('rok').value = data.due_date;
+      });
+  }
+</script>
+
+</body>
+</html>
