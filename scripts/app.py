@@ -11,6 +11,15 @@ BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 TEMPLATE_DIR = os.path.join(BASE_DIR, 'templates')
 app = Flask(__name__, template_folder=TEMPLATE_DIR, static_folder=os.path.join(BASE_DIR, 'static'))
 
+from utilis import (
+    round_down_hour,
+    render_odt_template,
+    convert_to_pdf,
+    get_next_invoice_number,
+    OUTPUT_DIR,
+    TEMPLATE_PATH
+)
+
 # Helper functions
 def convert_html_date_to_display(html_date_str, html_time_str):
     """Convert HTML date (YYYY-MM-DD) and time (HH:MM) to display format (DD/MM/YY HH:MM)"""

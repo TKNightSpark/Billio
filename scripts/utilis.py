@@ -5,6 +5,11 @@ import subprocess
 from jinja2 import Template
 from pathlib import Path
 
+# === Path Setup ===
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+TEMPLATE_PATH = os.path.join(BASE_DIR, 'templates', 'invoice_template.odt')
+OUTPUT_DIR = os.path.join(BASE_DIR, 'output')
+
 def round_down_hour(dt):
     return dt.replace(minute=0, second=0, microsecond=0)
 

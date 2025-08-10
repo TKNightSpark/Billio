@@ -13,11 +13,13 @@ TEMPLATE_PATH = os.path.join(BASE_DIR, 'templates', 'invoice_template.odt')
 OUTPUT_DIR = os.path.join(BASE_DIR, 'output')
 
 # === Functions ===
-from utils import (
+from utilis import (
     round_down_hour,
     render_odt_template,
     convert_to_pdf,
     get_next_invoice_number,
+    OUTPUT_DIR,
+    TEMPLATE_PATH
 )
 # === Main Script ===
 if __name__ == "__main__":
