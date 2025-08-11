@@ -21,6 +21,7 @@ from utilis import (
     OUTPUT_DIR,
     TEMPLATE_PATH
 )
+
 # === Main Script ===
 if __name__ == "__main__":
     print("\n" + "="*50)
