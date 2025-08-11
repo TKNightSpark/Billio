@@ -1,4 +1,5 @@
 import gi
+import json
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk
 from datetime import datetime, timedelta
@@ -182,8 +183,59 @@ class InvoiceWindow(Gtk.Window):
         preview_btn.connect("clicked", self.on_preview_pdf)
         self.vbox.pack_start(preview_btn, False, False, 6)
 
+        edit_btn = Gtk.Button(label="Uredi odabrani račun")
+        edit_btn.connect("clicked", self.on_edit_invoice)
+        self.vbox.pack_start(edit_btn, False, False, 6)
+
         self.populate_invoice_meta()
         self.populate_pdf_tree()
+
+    def on_edit_invoice(self, widget):
+        selection = self.pdfs_treeview.get_selection()
+        model, tree_iter = selection.get_selected()
+        if tree_iter is None:
+            self.show_error("Molimo odaberite račun za uređivanje.")
+            return
+
+        pdf_path = Path(model[tree_iter][1])
+        if pdf_path.is_dir():
+            self.show_error("Molimo odaberite PDF, ne folder.")
+            return
+
+        year_folder = pdf_path.parent.name
+        json_path = Path(OUTPUT_DIR) / "._invoice_data" / year_folder / pdf_path.name.replace(".pdf", ".json")
+        if not json_path.exists():
+            self.show_error("Podaci za uređivanje nisu pronađeni.")
+            return
+
+        try:
+            with open(json_path, "r", encoding="utf-8") as jf:
+                data = json.load(jf)
+
+            # Populate form fields
+            self.invoice_number_entry.set_text(data.get("invoice_number", ""))
+            self.date_entry.set_text(data.get("invoice_date", "").split()[0])
+            self.time_entry.set_text(data.get("invoice_time", ""))
+            self.due_entry.set_text(data.get("due_date", ""))
+
+            self.client_entries["Naziv / Ime i prezime"].set_text(data.get("client_name", ""))
+            self.client_entries["OIB"].set_text(data.get("oib", ""))
+            self.client_entries["Adresa"].set_text(data.get("address", ""))
+            self.client_entries["Poštanski broj"].set_text(data.get("postal_code", ""))
+            self.client_entries["Grad"].set_text(data.get("city", ""))
+
+            # Clear current items
+            for row in list(self.items_listbox.get_children()):
+                self.items_listbox.remove(row)
+
+            for item in data.get("items", []):
+                self.new_item_name.set_text(item["name"])
+                self.new_item_qty.set_text(str(item["quantity"]))
+                self.new_item_price.set_text(str(item["unit_price"]))
+                self.on_add_item(None)
+
+        except Exception as e:
+            self.show_error(f"Greška prilikom učitavanja: {e}")
 
     def populate_invoice_meta(self):
         now = datetime.now()
@@ -295,7 +347,8 @@ class InvoiceWindow(Gtk.Window):
             self.show_error("Naziv kupca je obavezan.")
             return
 
-        invoice_type = self.invoice_type_combo.get_active_text()
+        selected_type = self.invoice_type_combo.get_active_text()
+        invoice_type = "R1" if selected_type.lower() == "r1" else ""
         invoice_number = self.invoice_number_entry.get_text()
         invoice_date = self.date_entry.get_text()
         invoice_time = self.time_entry.get_text()
@@ -387,6 +440,7 @@ class InvoiceWindow(Gtk.Window):
             "items": items,
             "total": total,
             "formatted_total": formatted_total,
+            "invoice_type": invoice_type,
         }
 
         try:
@@ -401,6 +455,19 @@ class InvoiceWindow(Gtk.Window):
             if not os.path.exists(temp_pdf_path):
                 self.show_error("PDF datoteka nije pronađena nakon konverzije.")
                 return
+
+            # Save permanent ODT copy next to PDF
+            final_odt_path = year_folder / pdf_filename.replace(".pdf", ".odt")
+            shutil.copy(temp_odt_path, final_odt_path)
+
+            # Save JSON data to hidden folder
+            json_folder = Path(OUTPUT_DIR) / "._invoice_data" / year_str
+            json_folder.mkdir(parents=True, exist_ok=True)
+            json_filename = pdf_filename.replace(".pdf", ".json")
+            final_json_path = json_folder / json_filename
+
+            with open(final_json_path, "w", encoding="utf-8") as jf:
+                json.dump(context, jf, ensure_ascii=False, indent=2)
 
             shutil.move(temp_pdf_path, final_pdf_path)
             shutil.rmtree(temp_dir, ignore_errors=True)
@@ -427,10 +494,14 @@ class InvoiceWindow(Gtk.Window):
             return
 
         for year_folder in sorted(base.iterdir()):
-            if year_folder.is_dir():
-                year_iter = self.pdfs_store.append(None, [year_folder.name, str(year_folder)])
-                for pdf_file in sorted(year_folder.glob("*.pdf")):
-                    self.pdfs_store.append(year_iter, [pdf_file.name, str(pdf_file)])
+    # Skip the hidden JSON data folder
+            if not year_folder.is_dir() or year_folder.name.startswith("._invoice_data"):
+                continue
+
+            year_iter = self.pdfs_store.append(None, [year_folder.name, str(year_folder)])
+            for pdf_file in sorted(year_folder.glob("*.pdf")):
+                self.pdfs_store.append(year_iter, [pdf_file.name, str(pdf_file)])
+
 
     def on_preview_pdf(self, widget):
         selection = self.pdfs_treeview.get_selection()
