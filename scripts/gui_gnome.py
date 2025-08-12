@@ -1,7 +1,7 @@
 import gi
 import json
 gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk
+from gi.repository import Gtk, Gdk
 from datetime import datetime, timedelta
 from pathlib import Path
 import subprocess, platform, os, shutil
@@ -35,11 +35,22 @@ class InvoiceWindow(Gtk.Window):
         settings = Gtk.Settings.get_default()
         settings.set_property("gtk-application-prefer-dark-theme", True)
 
-        self.set_default_size(900, 700)
-        self.set_border_width(24)
+        self.set_default_size(900, 650)
+        self.set_border_width(0)  # Remove default border for cleaner look
+
+        # Apply custom CSS styling
+        self._apply_custom_css()
+
+        # Main container with padding
+        main_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        main_container.set_margin_left(16)
+        main_container.set_margin_right(16)
+        main_container.set_margin_top(16)
+        main_container.set_margin_bottom(16)
+        self.add(main_container)
 
         self.vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        self.add(self.vbox)
+        main_container.pack_start(self.vbox, True, True, 0)
 
         # Load master data
         self._load_naselja_and_ulice()
@@ -47,6 +58,134 @@ class InvoiceWindow(Gtk.Window):
 
         self._build_ui()
         self.populate_invoice_meta()
+
+    def _apply_custom_css(self):
+        """Apply custom CSS styling for modern look"""
+        css_provider = Gtk.CssProvider()
+        css = """
+        /* Card-like containers */
+        .invoice-card {
+            background-color: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 12px;
+            margin: 4px 0;
+        }
+        
+        /* Section headers */
+        .section-header {
+            font-size: 16px;
+            font-weight: 600;
+            color: #64B5F6;
+            margin-bottom: 8px;
+        }
+        
+        /* Primary buttons */
+        .btn-primary {
+            background: linear-gradient(135deg, #42A5F5, #1E88E5);
+            border: none;
+            border-radius: 6px;
+            color: white;
+            font-weight: 600;
+            padding: 8px 16px;
+            margin: 2px;
+            min-height: 36px;
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #1E88E5, #1565C0);
+            box-shadow: 0 2px 8px rgba(66, 165, 245, 0.3);
+        }
+        
+        /* Secondary buttons */
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            color: #E3F2FD;
+            font-weight: 500;
+            padding: 6px 12px;
+            margin: 2px;
+            min-height: 32px;
+        }
+        
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+        
+        /* Danger buttons */
+        .btn-danger {
+            background: rgba(244, 67, 54, 0.2);
+            border: 1px solid rgba(244, 67, 54, 0.4);
+            border-radius: 4px;
+            color: #FF8A80;
+            padding: 4px 8px;
+            font-size: 11px;
+        }
+        
+        .btn-danger:hover {
+            background: rgba(244, 67, 54, 0.3);
+            color: #FFCDD2;
+        }
+        
+        /* Modern entries */
+        .modern-entry {
+            border-radius: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.05);
+            padding: 6px 8px;
+            min-height: 28px;
+        }
+        
+        .modern-entry:focus {
+            border-color: #42A5F5;
+            background: rgba(255, 255, 255, 0.08);
+            box-shadow: 0 0 0 1px rgba(66, 165, 245, 0.2);
+        }
+        
+        /* Labels */
+        .field-label {
+            color: #B0BEC5;
+            font-weight: 500;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+        
+        /* List items */
+        .item-row {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 6px;
+            margin: 2px 0;
+            padding: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        
+        /* Total display */
+        .total-display {
+            font-size: 16px;
+            font-weight: 700;
+            color: #4CAF50;
+            padding: 8px;
+            background: rgba(76, 175, 80, 0.1);
+            border-radius: 6px;
+            border-left: 3px solid #4CAF50;
+        }
+        
+        /* Scrolled windows */
+        .items-scroll {
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.2);
+        }
+        """
+        
+        css_provider.load_from_data(css.encode())
+        Gtk.StyleContext.add_provider_for_screen(
+            Gdk.Screen.get_default(),
+            css_provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
 
     def _load_naselja_and_ulice(self):
         base_path = Path(__file__).resolve().parent.parent / "database"
@@ -73,12 +212,71 @@ class InvoiceWindow(Gtk.Window):
         with open(clients_path, "w", encoding="utf-8") as f:
             json.dump(self.clients, f, ensure_ascii=False, indent=2)
 
+    def _create_card_container(self, title=None, icon_name=None):
+        """Create a card-like container with optional title and GNOME icon"""
+        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        card.get_style_context().add_class("invoice-card")
+        
+        if title:
+            header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+            icon = None
+            if icon_name:
+                try:
+                    icon = Gtk.Image.new_from_icon_name(icon_name, Gtk.IconSize.MENU)
+                except Exception:
+                    icon = None
+            if icon:
+                header_box.pack_start(icon, False, False, 0)
+            title_label = Gtk.Label(label=title, xalign=0)
+            title_label.get_style_context().add_class("section-header")
+            header_box.pack_start(title_label, False, False, 0)
+            card.pack_start(header_box, False, False, 0)
+        
+        return card
+
+    def _create_styled_button(self, label, style_class="btn-secondary", icon_name=None):
+        """Create a styled button with optional icon"""
+        if icon_name:
+            button = Gtk.Button()
+            box = Gtk.Box(spacing=8)
+            
+            # Try to create icon, fallback to text if icon not available
+            try:
+                icon = Gtk.Image.new_from_icon_name(icon_name, Gtk.IconSize.BUTTON)
+                box.pack_start(icon, False, False, 0)
+            except:
+                pass  # Icon not available, just use text
+                
+            label_widget = Gtk.Label(label=label)
+            box.pack_start(label_widget, False, False, 0)
+            button.add(box)
+        else:
+            button = Gtk.Button(label=label)
+        
+        button.get_style_context().add_class(style_class)
+        return button
+
+    def _create_field_with_label(self, parent, label_text, entry_widget=None):
+        """Create a field with styled label"""
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        
+        label = Gtk.Label(label=label_text, xalign=0)
+        label.get_style_context().add_class("field-label")
+        vbox.pack_start(label, False, False, 0)
+        
+        if entry_widget is None:
+            entry_widget = Gtk.Entry()
+            entry_widget.get_style_context().add_class("modern-entry")
+        
+        vbox.pack_start(entry_widget, False, False, 0)
+        parent.pack_start(vbox, True, True, 0)
+        
+        return entry_widget
+
     def _build_ui(self):
         self._build_invoice_meta_section()
-        self._build_dates_section()
         self._build_client_and_items_section()
-        self._build_generate_button()
-        self._build_open_folder_button()
+        self._build_action_buttons()
 
         # Setup client name completion AFTER client_entries dict initialized
         client_name_entry = self.client_entries.get("Naziv / Ime i prezime")
@@ -92,65 +290,60 @@ class InvoiceWindow(Gtk.Window):
             client_name_entry.connect("changed", self.on_client_name_changed)
 
     def _build_invoice_meta_section(self):
-        hbox = Gtk.Box(spacing=12, hexpand=True)
-        self.vbox.pack_start(hbox, False, False, 0)
+        """Build merged invoice meta and dates section with card styling"""
+        card = self._create_card_container("Osnovni podaci računa", icon_name="emblem-system-symbolic")
+        self.vbox.pack_start(card, False, False, 0)
 
-        hbox.pack_start(Gtk.Label(label="Vrsta računa", xalign=0), False, False, 0)
+        hbox_top = Gtk.Box(spacing=16, hexpand=True)
+        card.pack_start(hbox_top, False, False, 0)
+
+        # Invoice type
+        type_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        type_label = Gtk.Label(label="Vrsta računa", xalign=0)
+        type_label.get_style_context().add_class("field-label")
+        type_vbox.pack_start(type_label, False, False, 0)
+        
         self.invoice_type_combo = Gtk.ComboBoxText()
-        self.invoice_type_combo.append_text("obican")
-        self.invoice_type_combo.append_text("r1")
+        self.invoice_type_combo.get_style_context().add_class("modern-entry")
+        self.invoice_type_combo.append_text("Običan račun")
+        self.invoice_type_combo.append_text("R1")
         self.invoice_type_combo.set_active(0)
-        hbox.pack_start(self.invoice_type_combo, False, False, 0)
+        type_vbox.pack_start(self.invoice_type_combo, False, False, 0)
+        hbox_top.pack_start(type_vbox, False, False, 0)
 
-        hbox.pack_start(Gtk.Label(label="Broj računa (format: X/2/2)", xalign=0), False, False, 0)
-        self.invoice_number_entry = Gtk.Entry()
-        self.invoice_number_entry.set_editable(True)
+        # Invoice number
+        self.invoice_number_entry = self._create_field_with_label(hbox_top, "Broj računa")
         self.invoice_number_entry.set_width_chars(15)
-        hbox.pack_start(self.invoice_number_entry, False, False, 0)
 
-    def _build_dates_section(self):
-        def add_entry(box, label):
-            vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-            box.pack_start(vbox, True, True, 0)
-            vbox.pack_start(Gtk.Label(label=label, xalign=0), False, False, 0)
-            entry = Gtk.Entry()
-            entry.set_editable(True)
-            vbox.pack_start(entry, False, False, 0)
-            return entry
+        hbox_bottom = Gtk.Box(spacing=16, hexpand=True)
+        card.pack_start(hbox_bottom, False, False, 0)
 
-        hbox_dates = Gtk.Box(spacing=12, hexpand=True)
-        self.vbox.pack_start(hbox_dates, False, False, 0)
-        self.date_entry = add_entry(hbox_dates, "Datum")
-        self.time_entry = add_entry(hbox_dates, "Vrijeme")
-        self.due_entry = add_entry(hbox_dates, "Rok plaćanja")
+        self.date_entry = self._create_field_with_label(hbox_bottom, "Datum")
+        self.time_entry = self._create_field_with_label(hbox_bottom, "Vrijeme")
+        self.due_entry = self._create_field_with_label(hbox_bottom, "Rok plaćanja")
 
     def _build_client_and_items_section(self):
-        columns_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=24)
+        """Build client and items sections with improved layout"""
+        columns_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
         self.vbox.pack_start(columns_hbox, True, True, 0)
 
         self._build_client_info(columns_hbox)
-        separator = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
-        columns_hbox.pack_start(separator, False, False, 0)
         self._build_items_section(columns_hbox)
 
     def _build_client_info(self, parent_box):
-        client_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        parent_box.pack_start(client_vbox, True, True, 0)
+        """Build client info section with card styling"""
+        client_card = self._create_card_container("Podaci o kupcu", icon_name="avatar-default-symbolic")
+        parent_box.pack_start(client_card, True, True, 0)
 
-        client_label = Gtk.Label()
-        client_label.set_markup("<span font='18' foreground='#5C6BC0'>Podaci o kupcu</span>")
-        client_label.set_xalign(0)
-        client_vbox.pack_start(client_label, False, False, 6)
-
-        # Clear button
-        clear_btn = Gtk.Button(label="Očisti polja kupca")
-        clear_btn.set_tooltip_text("Očisti Naziv / Ime i prezime, Poštanski broj, OIB, Grad i Adresu")
+        # Clear button with icon
+        clear_btn = self._create_styled_button("Očisti polja", "btn-secondary", "edit-clear")
+        clear_btn.set_tooltip_text("Očisti sva polja kupca")
         clear_btn.connect("clicked", self.on_clear_client_fields)
-        client_vbox.pack_start(clear_btn, False, False, 6)
+        client_card.pack_start(clear_btn, False, False, 0)
 
         # Grid for client fields
-        grid = Gtk.Grid(column_spacing=12, row_spacing=6)
-        client_vbox.pack_start(grid, True, True, 0)
+        grid = Gtk.Grid(column_spacing=12, row_spacing=8)
+        client_card.pack_start(grid, True, True, 0)
 
         client_fields = {
             "Grad": {"type": "city"},
@@ -164,23 +357,33 @@ class InvoiceWindow(Gtk.Window):
         for i, (label_text, props) in enumerate(client_fields.items()):
             col = 0 if i < 3 else 1
             row = i if col == 0 else i - 3
-            grid.attach(Gtk.Label(label=label_text, xalign=0), col, row * 2, 1, 1)
+            
+            # Create field container
+            field_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+            grid.attach(field_vbox, col, row, 1, 1)
+            
+            # Create label
+            label = Gtk.Label(label=label_text, xalign=0)
+            label.get_style_context().add_class("field-label")
+            field_vbox.pack_start(label, False, False, 0)
 
+            # Create entry
             if props.get("type") == "city":
                 entry = self._create_city_entry()
             elif props.get("type") == "street":
                 entry = self._create_street_entry()
             else:
                 entry = Gtk.Entry()
+                entry.get_style_context().add_class("modern-entry")
 
-            grid.attach(entry, col, row * 2 + 1, 1, 1)
+            field_vbox.pack_start(entry, False, False, 0)
             self.client_entries[label_text] = entry
 
-        grid.set_column_homogeneous(False)
-        grid.set_column_spacing(18)
+        grid.set_column_homogeneous(True)
 
     def _create_city_entry(self):
         entry = Gtk.Entry()
+        entry.get_style_context().add_class("modern-entry")
         completion = Gtk.EntryCompletion()
         completion.set_text_column(0)
         city_store = Gtk.ListStore(str)
@@ -196,6 +399,7 @@ class InvoiceWindow(Gtk.Window):
 
     def _create_street_entry(self):
         entry = Gtk.Entry()
+        entry.get_style_context().add_class("modern-entry")
         completion = Gtk.EntryCompletion()
         completion.set_text_column(0)
         self.street_store = Gtk.ListStore(str)
@@ -206,52 +410,89 @@ class InvoiceWindow(Gtk.Window):
         return entry
 
     def _build_items_section(self, parent_box):
-        items_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        parent_box.pack_start(items_vbox, True, True, 0)
+        """Build items section with modern styling"""
+        items_card = self._create_card_container("Stavke računa", icon_name="text-x-generic-symbolic")
+        parent_box.pack_start(items_card, True, True, 0)
 
-        items_label = Gtk.Label()
-        items_label.set_markup("<span font='18' foreground='#5C6BC0'>Stavke</span>")
-        items_label.set_xalign(0)
-        items_vbox.pack_start(items_label, False, False, 6)
-
+        # Items list with styled scrolled window
         self.items_listbox = Gtk.ListBox()
         self.items_listbox.set_selection_mode(Gtk.SelectionMode.NONE)
+        
         scrolled = Gtk.ScrolledWindow()
-        scrolled.set_min_content_height(147)
+        scrolled.get_style_context().add_class("items-scroll")
+        scrolled.set_min_content_height(140)
+        scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scrolled.add(self.items_listbox)
-        items_vbox.pack_start(scrolled, True, True, 0)
+        items_card.pack_start(scrolled, True, True, 0)
 
-        add_item_box = Gtk.Box(spacing=10)
-        items_vbox.pack_start(add_item_box, False, False, 0)
+        # Add item section
+        add_section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        items_card.pack_start(add_section, False, False, 0)
 
+        # Add item fields in a grid
+        add_grid = Gtk.Grid(column_spacing=6, row_spacing=4)
+        add_section.pack_start(add_grid, False, False, 0)
+
+        # Create styled entries for adding items
+        name_label = Gtk.Label(label="Naziv stavke", xalign=0)
+        name_label.get_style_context().add_class("field-label")
+        add_grid.attach(name_label, 0, 0, 1, 1)
+        
         self.new_item_name = Gtk.Entry()
-        self.new_item_name.set_placeholder_text("Naziv stavke")
+        self.new_item_name.get_style_context().add_class("modern-entry")
+        self.new_item_name.set_placeholder_text("Unesite naziv...")
+        add_grid.attach(self.new_item_name, 0, 1, 1, 1)
+
+        qty_label = Gtk.Label(label="Količina", xalign=0)
+        qty_label.get_style_context().add_class("field-label")
+        add_grid.attach(qty_label, 1, 0, 1, 1)
+        
         self.new_item_qty = Gtk.Entry()
-        self.new_item_qty.set_placeholder_text("Količina")
+        self.new_item_qty.get_style_context().add_class("modern-entry")
+        self.new_item_qty.set_placeholder_text("1,00")
+        self.new_item_qty.set_width_chars(8)
+        add_grid.attach(self.new_item_qty, 1, 1, 1, 1)
+
+        price_label = Gtk.Label(label="Jedinična cijena", xalign=0)
+        price_label.get_style_context().add_class("field-label")
+        add_grid.attach(price_label, 2, 0, 1, 1)
+        
         self.new_item_price = Gtk.Entry()
-        self.new_item_price.set_placeholder_text("Jedinična cijena")
-        add_btn = Gtk.Button(label="Dodaj stavku")
+        self.new_item_price.get_style_context().add_class("modern-entry")
+        self.new_item_price.set_placeholder_text("0,00")
+        self.new_item_price.set_width_chars(12)
+        add_grid.attach(self.new_item_price, 2, 1, 1, 1)
+
+        # Add button with icon
+        add_btn = self._create_styled_button("Dodaj stavku", "btn-primary", "list-add")
         add_btn.connect("clicked", self.on_add_item)
+        add_grid.attach(add_btn, 3, 1, 1, 1)
 
-        add_item_box.pack_start(self.new_item_name, True, True, 0)
-        add_item_box.pack_start(self.new_item_qty, True, True, 0)
-        add_item_box.pack_start(self.new_item_price, True, True, 0)
-        add_item_box.pack_start(add_btn, False, False, 0)
-
+        # Total display with modern styling
         self.grand_total_label = Gtk.Label(label="Ukupno: 0,00 EUR", xalign=1)
-        items_vbox.pack_start(self.grand_total_label, False, False, 4)
+        self.grand_total_label.get_style_context().add_class("total-display")
+        items_card.pack_start(self.grand_total_label, False, False, 0)
 
-    def _build_generate_button(self):
-        btn = Gtk.Button(label="Kreiraj račun")
-        btn.get_style_context().add_class("suggested-action")
-        btn.connect("clicked", self.on_generate_invoice)
-        self.vbox.pack_start(btn, False, False, 12)
+    def _build_action_buttons(self):
+        """Build action buttons section with improved styling"""
+        actions_card = self._create_card_container()
+        self.vbox.pack_start(actions_card, False, False, 0)
 
-    def _build_open_folder_button(self):
-        edit_btn = Gtk.Button(label="Učitaj postojeći račun za uređivanje")
+        # Button container
+        button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        button_box.set_halign(Gtk.Align.CENTER)
+        actions_card.pack_start(button_box, False, False, 0)
+
+        # Generate invoice button (primary)
+        generate_btn = self._create_styled_button(" Kreiraj račun", "btn-primary", "document-new")
+        generate_btn.connect("clicked", self.on_generate_invoice)
+        button_box.pack_start(generate_btn, False, False, 0)
+
+        # Edit existing invoice button
+        edit_btn = self._create_styled_button("Učitaj postojeći račun", "btn-secondary", "document-open")
         edit_btn.set_tooltip_text("Odaberi PDF račun za uređivanje")
         edit_btn.connect("clicked", self.on_select_invoice_for_editing)
-        self.vbox.pack_start(edit_btn, False, False, 6)
+        button_box.pack_start(edit_btn, False, False, 0)
 
     # ------------------ Callback handlers ---------------------
 
@@ -315,30 +556,43 @@ class InvoiceWindow(Gtk.Window):
         self.new_item_price.set_text("")
 
     def _add_item_row(self, name, qty, price):
+        """Create styled item row"""
         row = Gtk.ListBoxRow()
-        hbox = Gtk.Box(spacing=10)
+        row.get_style_context().add_class("item-row")
+        
+        hbox = Gtk.Box(spacing=8, margin=6)
         row.add(hbox)
 
+        # Name entry
         name_entry = Gtk.Entry()
+        name_entry.get_style_context().add_class("modern-entry")
         name_entry.set_text(name)
         name_entry.set_hexpand(True)
         hbox.pack_start(name_entry, True, True, 0)
 
+        # Quantity entry
         qty_entry = Gtk.Entry()
+        qty_entry.get_style_context().add_class("modern-entry")
         qty_entry.set_text(qty)
-        qty_entry.set_width_chars(10)
+        qty_entry.set_width_chars(8)
         hbox.pack_start(qty_entry, False, False, 0)
 
+        # Price entry
         price_entry = Gtk.Entry()
+        price_entry.get_style_context().add_class("modern-entry")
         price_entry.set_text(price)
-        price_entry.set_width_chars(15)
+        price_entry.set_width_chars(12)
         hbox.pack_start(price_entry, False, False, 0)
 
+        # Line total label
         line_total_label = Gtk.Label(label="0,00", xalign=1)
         line_total_label.set_width_chars(10)
+        line_total_label.get_style_context().add_class("field-label")
         hbox.pack_start(line_total_label, False, False, 0)
 
-        remove_btn = Gtk.Button(label="Remove")
+        # Remove button with modern styling
+        remove_btn = self._create_styled_button("✕", "btn-danger")
+        remove_btn.set_tooltip_text("Ukloni stavku")
         remove_btn.connect("clicked", lambda w: self.remove_item_row(row))
         hbox.pack_start(remove_btn, False, False, 0)
 
@@ -373,14 +627,18 @@ class InvoiceWindow(Gtk.Window):
         total = 0.0
         for row in self.items_listbox.get_children():
             hbox = row.get_child()
-            label = next((w for w in hbox.get_children() if isinstance(w, Gtk.Label)), None)
-            if label:
-                text = label.get_text()
-                try:
-                    val = float(text.replace(" ", "").replace(",", "."))
-                    total += val
-                except ValueError:
-                    pass
+            labels = [w for w in hbox.get_children() if isinstance(w, Gtk.Label)]
+            if labels:
+                # Find the total label (should be the one with currency format)
+                for label in labels:
+                    text = label.get_text()
+                    if "," in text and text.replace(" ", "").replace(",", ".").replace(".", "").isdigit():
+                        try:
+                            val = float(text.replace(" ", "").replace(",", "."))
+                            total += val
+                            break
+                        except ValueError:
+                            continue
         formatted_total = self.format_currency(total)
         self.grand_total_label.set_text(f"Ukupno: {formatted_total} EUR")
 
@@ -411,19 +669,6 @@ class InvoiceWindow(Gtk.Window):
             entry = self.client_entries.get(field)
             if entry:
                 entry.set_text("")
-
-    def on_open_invoices_folder(self, widget):
-        """Open the OUTPUT_DIR folder in the system's default file manager"""
-        output_path = Path(OUTPUT_DIR)
-        
-        if not output_path.exists():
-            # Create the directory if it doesn't exist
-            output_path.mkdir(parents=True, exist_ok=True)
-        
-        try:
-            open_folder_in_file_manager(str(output_path))
-        except Exception as e:
-            self.show_error(f"Greška pri otvaranju mape: {e}")
 
     def on_generate_invoice(self, widget):
         data = self._collect_invoice_data()
@@ -478,13 +723,8 @@ class InvoiceWindow(Gtk.Window):
             shutil.move(temp_pdf_path, final_pdf_path)
             shutil.rmtree(temp_dir, ignore_errors=True)
 
-            dialog = Gtk.MessageDialog(parent=self,
-                                     flags=0,
-                                     message_type=Gtk.MessageType.INFO,
-                                     buttons=Gtk.ButtonsType.OK,
-                                     text=f"Račun uspješno kreiran:\n{final_pdf_path}")
-            dialog.run()
-            dialog.destroy()
+            # Show success dialog with modern styling
+            self.show_success(f"Račun uspješno kreiran:\n{final_pdf_path.name}")
 
             open_file_with_default_app(str(final_pdf_path))
 
@@ -590,10 +830,9 @@ class InvoiceWindow(Gtk.Window):
             parent=self,
             flags=0,
             message_type=Gtk.MessageType.QUESTION,
-            buttons=Gtk.ButtonsType.NONE,  # No default buttons
+            buttons=Gtk.ButtonsType.NONE,
             text="Želite li spremiti ovog kupca za buduću upotrebu?"
         )
-        # Add custom buttons with labels "Da" and "Ne"
         dialog.add_button("Ne", Gtk.ResponseType.NO)
         dialog.add_button("Da", Gtk.ResponseType.YES)
 
@@ -696,14 +935,44 @@ class InvoiceWindow(Gtk.Window):
         except Exception as e:
             self.show_error(f"Greška prilikom učitavanja: {e}")
 
+    def show_error(self, message):
+        """Show error dialog with modern styling"""
+        dialog = Gtk.MessageDialog(
+            parent=self,
+            flags=0,
+            message_type=Gtk.MessageType.ERROR,
+            buttons=Gtk.ButtonsType.OK,
+            text="Greška"
+        )
+        dialog.format_secondary_text(message)
+        dialog.run()
+        dialog.destroy()
+
+    def show_success(self, message):
+        """Show success dialog with modern styling"""
+        dialog = Gtk.MessageDialog(
+            parent=self,
+            flags=0,
+            message_type=Gtk.MessageType.INFO,
+            buttons=Gtk.ButtonsType.OK,
+            text="Uspjeh"
+        )
+        dialog.format_secondary_text(message)
+        dialog.run()
+        dialog.destroy()
+
     def show_info(self, message):
-        dlg = Gtk.MessageDialog(parent=self,
-                                flags=0,
-                                message_type=Gtk.MessageType.INFO,
-                                buttons=Gtk.ButtonsType.OK,
-                                text=message)
-        dlg.run()
-        dlg.destroy()
+        """Show info dialog with modern styling"""
+        dialog = Gtk.MessageDialog(
+            parent=self,
+            flags=0,
+            message_type=Gtk.MessageType.INFO,
+            buttons=Gtk.ButtonsType.OK,
+            text="Informacija"
+        )
+        dialog.format_secondary_text(message)
+        dialog.run()
+        dialog.destroy()
 
 
 if __name__ == "__main__":
