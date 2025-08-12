@@ -12,7 +12,6 @@ from utilis import (
 )
 
 def open_file_with_default_app(filepath):
-    """Open file with default OS application."""
     if platform.system() == "Windows":
         os.startfile(filepath)
     elif platform.system() == "Darwin":
@@ -20,40 +19,69 @@ def open_file_with_default_app(filepath):
     else:
         subprocess.run(["xdg-open", filepath])
 
-
 class InvoiceWindow(Gtk.Window):
     def __init__(self):
         super().__init__(title="Kreiranje računa")
-        self._configure_window()
-        self._load_data()
+
+        settings = Gtk.Settings.get_default()
+        settings.set_property("gtk-application-prefer-dark-theme", True)
+
+        self.set_default_size(900, 700)
+        self.set_border_width(24)
+
+        self.vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        self.add(self.vbox)
+
+        # Load master data
+        self._load_naselja_and_ulice()
+        self._load_clients()
+
         self._build_ui()
         self.populate_invoice_meta()
         self.populate_pdf_tree()
 
-    def _configure_window(self):
-        """Set window properties and main container."""
-        settings = Gtk.Settings.get_default()
-        settings.set_property("gtk-application-prefer-dark-theme", True)  # Dark theme preference
-        self.set_default_size(900, 700)
-        self.set_border_width(24)
-        self.vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        self.add(self.vbox)
-
-    def _load_data(self):
-        """Load naselja and ulice JSON data."""
+    def _load_naselja_and_ulice(self):
         base_path = Path(__file__).resolve().parent.parent / "database"
         with open(base_path / "naselja.json", encoding="utf-8") as f:
             self.naselja = json.load(f)
         with open(base_path / "ulice.json", encoding="utf-8") as f:
             self.ulice = json.load(f)
 
+    def _load_clients(self):
+        clients_path = Path(__file__).resolve().parent.parent / "database" / "klijenti.json"
+        if clients_path.exists():
+            with open(clients_path, encoding="utf-8") as f:
+                self.clients = json.load(f)
+        else:
+            self.clients = []
+
+        self.client_name_store = Gtk.ListStore(str)
+        self.client_name_store.clear()
+        for client in self.clients:
+            self.client_name_store.append([client['client_name']])
+
+    def _save_clients(self):
+        clients_path = Path(__file__).resolve().parent.parent / "database" / "klijenti.json"
+        with open(clients_path, "w", encoding="utf-8") as f:
+            json.dump(self.clients, f, ensure_ascii=False, indent=2)
+
     def _build_ui(self):
-        """Build full UI."""
         self._build_invoice_meta_section()
         self._build_dates_section()
         self._build_client_and_items_section()
         self._build_generate_button()
         self._build_pdf_preview_section()
+
+        # Setup client name completion AFTER client_entries dict initialized
+        client_name_entry = self.client_entries.get("Naziv / Ime i prezime")
+        if client_name_entry:
+            completion = Gtk.EntryCompletion()
+            completion.set_model(self.client_name_store)
+            completion.set_text_column(0)
+            completion.set_inline_completion(True)
+            completion.set_popup_completion(True)
+            client_name_entry.set_completion(completion)
+            client_name_entry.connect("changed", self.on_client_name_changed)
 
     def _build_invoice_meta_section(self):
         hbox = Gtk.Box(spacing=12, hexpand=True)
@@ -61,36 +89,34 @@ class InvoiceWindow(Gtk.Window):
 
         hbox.pack_start(Gtk.Label(label="Vrsta računa", xalign=0), False, False, 0)
         self.invoice_type_combo = Gtk.ComboBoxText()
-        for inv_type in ("obican", "r1"):
-            self.invoice_type_combo.append_text(inv_type)
+        self.invoice_type_combo.append_text("obican")
+        self.invoice_type_combo.append_text("r1")
         self.invoice_type_combo.set_active(0)
         hbox.pack_start(self.invoice_type_combo, False, False, 0)
 
         hbox.pack_start(Gtk.Label(label="Broj računa (format: X/2/2)", xalign=0), False, False, 0)
         self.invoice_number_entry = Gtk.Entry()
-        self.invoice_number_entry.set_editable(False)
+        self.invoice_number_entry.set_editable(True)
         self.invoice_number_entry.set_width_chars(15)
         hbox.pack_start(self.invoice_number_entry, False, False, 0)
 
     def _build_dates_section(self):
-        """Add date, time and due date entries."""
-        def add_date_entry(container, label_text):
+        def add_entry(box, label):
             vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-            container.pack_start(vbox, True, True, 0)
-            vbox.pack_start(Gtk.Label(label=label_text, xalign=0), False, False, 0)
+            box.pack_start(vbox, True, True, 0)
+            vbox.pack_start(Gtk.Label(label=label, xalign=0), False, False, 0)
             entry = Gtk.Entry()
-            entry.set_editable(False)
+            entry.set_editable(True)
             vbox.pack_start(entry, False, False, 0)
             return entry
 
-        hbox = Gtk.Box(spacing=12, hexpand=True)
-        self.vbox.pack_start(hbox, False, False, 0)
-        self.date_entry = add_date_entry(hbox, "Datum")
-        self.time_entry = add_date_entry(hbox, "Vrijeme")
-        self.due_entry = add_date_entry(hbox, "Rok plaćanja")
+        hbox_dates = Gtk.Box(spacing=12, hexpand=True)
+        self.vbox.pack_start(hbox_dates, False, False, 0)
+        self.date_entry = add_entry(hbox_dates, "Datum")
+        self.time_entry = add_entry(hbox_dates, "Vrijeme")
+        self.due_entry = add_entry(hbox_dates, "Rok plaćanja")
 
     def _build_client_and_items_section(self):
-        """Build left (client info) and right (items) columns."""
         columns_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=24)
         self.vbox.pack_start(columns_hbox, True, True, 0)
 
@@ -108,32 +134,39 @@ class InvoiceWindow(Gtk.Window):
         client_label.set_xalign(0)
         client_vbox.pack_start(client_label, False, False, 6)
 
+        # INSERT clear button here:
+        clear_btn = Gtk.Button(label="Očisti polja kupca")
+        clear_btn.set_tooltip_text("Očisti Naziv / Ime i prezime, Poštanski broj, OIB, Grad i Adresu")
+        clear_btn.connect("clicked", self.on_clear_client_fields)
+        client_vbox.pack_start(clear_btn, False, False, 6)
+
+        # Then add the grid and other widgets as before
         grid = Gtk.Grid(column_spacing=12, row_spacing=6)
         client_vbox.pack_start(grid, True, True, 0)
 
-        # Fields: label text, col, row
-        fields = [
-            ("Naziv / Ime i prezime", 0, 0),
-            ("OIB", 1, 0),
-            ("Adresa", 0, 1),
-            ("Poštanski broj", 0, 2),
-            ("Grad", 1, 2),
-        ]
+        client_fields = {
+            "Grad": {"type": "city"},
+            "Poštanski broj": {},
+            "Adresa": {"type": "street"},
+            "Naziv / Ime i prezime": {},
+            "OIB": {},
+        }
         self.client_entries = {}
 
-        for text, col, row in fields:
-            label = Gtk.Label(label=text, xalign=0)
-            grid.attach(label, col, row * 2, 1, 1)
+        for i, (label_text, props) in enumerate(client_fields.items()):
+            col = 0 if i < 3 else 1
+            row = i if col == 0 else i - 3
+            grid.attach(Gtk.Label(label=label_text, xalign=0), col, row * 2, 1, 1)
 
-            if text == "Grad":
+            if props.get("type") == "city":
                 entry = self._create_city_entry()
-            elif text == "Adresa":
+            elif props.get("type") == "street":
                 entry = self._create_street_entry()
             else:
                 entry = Gtk.Entry()
 
             grid.attach(entry, col, row * 2 + 1, 1, 1)
-            self.client_entries[text] = entry
+            self.client_entries[label_text] = entry
 
         grid.set_column_homogeneous(False)
         grid.set_column_spacing(18)
@@ -212,7 +245,7 @@ class InvoiceWindow(Gtk.Window):
         label.set_xalign(0)
         self.vbox.pack_start(label, False, False, 12)
 
-        self.pdfs_store = Gtk.TreeStore(str, str)  # Display name, full path
+        self.pdfs_store = Gtk.TreeStore(str, str)
 
         self.pdfs_treeview = Gtk.TreeView(model=self.pdfs_store)
         renderer = Gtk.CellRendererText()
@@ -233,6 +266,8 @@ class InvoiceWindow(Gtk.Window):
         edit_btn.connect("clicked", self.on_edit_invoice)
         self.vbox.pack_start(edit_btn, False, False, 6)
 
+    # ------------------ Callback handlers ---------------------
+
     def on_city_changed(self, entry):
         city_name = entry.get_text().strip()
         self.street_store.clear()
@@ -251,6 +286,24 @@ class InvoiceWindow(Gtk.Window):
             self.client_entries["Poštanski broj"].set_text(str(zip_code))
         else:
             self.client_entries["Poštanski broj"].set_text("")
+
+    def on_client_name_changed(self, entry):
+        name = entry.get_text().strip()
+        client = self._find_client_by_name(name)
+        if client:
+            self._fill_client_fields(client)
+
+    def _find_client_by_name(self, name):
+        for client in self.clients:
+            if client["client_name"].strip().lower() == name.lower():
+                return client
+        return None
+
+    def _fill_client_fields(self, client):
+        self.client_entries["OIB"].set_text(client.get("oib", ""))
+        self.client_entries["Adresa"].set_text(client.get("address", ""))
+        self.client_entries["Poštanski broj"].set_text(client.get("postal_code", ""))
+        self.client_entries["Grad"].set_text(client.get("city", ""))
 
     def on_add_item(self, widget):
         name = self.new_item_name.get_text().strip()
@@ -326,16 +379,16 @@ class InvoiceWindow(Gtk.Window):
             total = q * p
             formatted = self.format_currency(total)
             total_label.set_text(formatted)
-        except Exception:
+        except:
             total_label.set_text("0,00")
 
     def update_grand_total(self):
         total = 0.0
         for row in self.items_listbox.get_children():
             hbox = row.get_child()
-            line_total_label = next((w for w in hbox.get_children() if isinstance(w, Gtk.Label)), None)
-            if line_total_label:
-                text = line_total_label.get_text()
+            label = next((w for w in hbox.get_children() if isinstance(w, Gtk.Label)), None)
+            if label:
+                text = label.get_text()
                 try:
                     val = float(text.replace(" ", "").replace(",", "."))
                     total += val
@@ -359,17 +412,38 @@ class InvoiceWindow(Gtk.Window):
         self.time_entry.set_text(rounded.strftime("%H:%M"))
         self.due_entry.set_text((rounded + timedelta(days=7)).strftime("%d.%m.%Y"))
 
+    def on_clear_client_fields(self, widget):
+        fields_to_clear = [
+            "Naziv / Ime i prezime",
+            "Poštanski broj",
+            "OIB",
+            "Grad",
+            "Adresa",
+        ]
+        for field in fields_to_clear:
+            entry = self.client_entries.get(field)
+            if entry:
+                entry.set_text("")
+
     def on_generate_invoice(self, widget):
         data = self._collect_invoice_data()
         if not data:
-            return  # Errors shown in method
+            return  # Validation errors shown
 
-        # Prepare paths and filenames
+        # Prompt to save client if new
+        self._prompt_save_client(data['context'])
+
         year_folder = Path(OUTPUT_DIR) / data['invoice_date'].strftime("%Y")
         year_folder.mkdir(parents=True, exist_ok=True)
 
-        safe_client_name = data["client_name"].replace(" ", "").replace("/", "_")
-        pdf_filename = f"{data['invoice_number'].replace('/', '-')}_{safe_client_name}.pdf"
+        # Format invoice number: replace '/' with '-'
+        invoice_num_for_file = data['invoice_number'].replace('/', '-')
+
+        # Lowercase client name and keep spaces intact
+        client_name_for_file = data["client_name"].lower()
+
+        # Build filename with ' - ' separator
+        pdf_filename = f"{invoice_num_for_file} - {client_name_for_file}.pdf"
         final_pdf_path = year_folder / pdf_filename
 
         temp_dir = os.path.join(OUTPUT_DIR, "temp_gui")
@@ -392,11 +466,9 @@ class InvoiceWindow(Gtk.Window):
                 self.show_error("PDF datoteka nije pronađena nakon konverzije.")
                 return
 
-            # Save ODT next to PDF
             final_odt_path = year_folder / pdf_filename.replace(".pdf", ".odt")
             shutil.copy(temp_odt_path, final_odt_path)
 
-            # Save JSON data
             json_folder = Path(OUTPUT_DIR) / "._invoice_data" / year_folder.name
             json_folder.mkdir(parents=True, exist_ok=True)
             final_json_path = json_folder / pdf_filename.replace(".pdf", ".json")
@@ -407,21 +479,20 @@ class InvoiceWindow(Gtk.Window):
             shutil.rmtree(temp_dir, ignore_errors=True)
 
             dialog = Gtk.MessageDialog(parent=self,
-                                       flags=0,
-                                       message_type=Gtk.MessageType.INFO,
-                                       buttons=Gtk.ButtonsType.OK,
-                                       text=f"Račun uspješno kreiran:\n{final_pdf_path}")
+                                     flags=0,
+                                     message_type=Gtk.MessageType.INFO,
+                                     buttons=Gtk.ButtonsType.OK,
+                                     text=f"Račun uspješno kreiran:\n{final_pdf_path}")
             dialog.run()
             dialog.destroy()
 
-            open_file_with_default_app(final_pdf_path)
+            open_file_with_default_app(str(final_pdf_path))
             self.populate_pdf_tree()
 
         except Exception as e:
             self.show_error(f"Neočekivana greška: {e}")
 
     def _collect_invoice_data(self):
-        """Collect and validate all invoice form data, return dict or None if errors."""
         client_name = self.client_entries["Naziv / Ime i prezime"].get_text().strip()
         if not client_name:
             self.show_error("Naziv kupca je obavezan.")
@@ -439,23 +510,21 @@ class InvoiceWindow(Gtk.Window):
         invoice_time_str = self.time_entry.get_text()
         due_date_str = self.due_entry.get_text()
 
-        # Parse date/time
         try:
             invoice_date = datetime.strptime(invoice_date_str, "%d.%m.%Y")
-        except ValueError:
+        except:
             invoice_date = datetime.now()
 
         try:
             invoice_time = datetime.strptime(invoice_time_str, "%H:%M").time()
-        except ValueError:
+        except:
             invoice_time = datetime.now().time()
 
         try:
             due_date = datetime.strptime(due_date_str, "%d.%m.%Y")
-        except ValueError:
+        except:
             due_date = invoice_date + timedelta(days=7)
 
-        # Collect items
         items = []
         for row in self.items_listbox.get_children():
             hbox = row.get_child()
@@ -507,13 +576,41 @@ class InvoiceWindow(Gtk.Window):
             "total": total,
             "formatted_total": self.format_currency(total),
         }
-
         return {
             "context": context,
             "invoice_date": invoice_date,
             "invoice_number": invoice_number,
             "client_name": client_name,
         }
+
+    def _prompt_save_client(self, context):
+        if self._find_client_by_name(context["client_name"]):
+            return  # Already saved
+
+        dialog = Gtk.MessageDialog(
+            parent=self,
+            flags=0,
+            message_type=Gtk.MessageType.QUESTION,
+            buttons=Gtk.ButtonsType.NONE,  # No default buttons
+            text="Želite li spremiti ovog kupca za buduću upotrebu?"
+        )
+        # Add custom buttons with labels "Da" and "Ne"
+        dialog.add_button("Ne", Gtk.ResponseType.NO)
+        dialog.add_button("Da", Gtk.ResponseType.YES)
+
+        response = dialog.run()
+        dialog.destroy()
+
+        if response == Gtk.ResponseType.YES:
+            self.clients.append({
+                "client_name": context["client_name"],
+                "oib": context["oib"],
+                "address": context["address"],
+                "postal_code": context["postal_code"],
+                "city": context["city"],
+            })
+            self._save_clients()
+            self.client_name_store.append([context["client_name"]])
 
     def populate_pdf_tree(self):
         self.pdfs_store.clear()
@@ -525,9 +622,9 @@ class InvoiceWindow(Gtk.Window):
             if not year_folder.is_dir() or year_folder.name.startswith("._invoice_data"):
                 continue
 
-            year_iter = self.pdfs_store.append(None, [year_folder.name, str(year_folder)])
+            parent_iter = self.pdfs_store.append(None, [year_folder.name, str(year_folder)])
             for pdf_file in sorted(year_folder.glob("*.pdf")):
-                self.pdfs_store.append(year_iter, [pdf_file.name, str(pdf_file)])
+                self.pdfs_store.append(parent_iter, [pdf_file.name, str(pdf_file)])
 
     def on_preview_pdf(self, widget):
         selection = self.pdfs_treeview.get_selection()
@@ -535,14 +632,17 @@ class InvoiceWindow(Gtk.Window):
         if tree_iter is None:
             self.show_error("Molimo odaberite PDF za pregled.")
             return
+
         path = Path(model[tree_iter][1])
         if path.is_dir():
             self.show_error("Molimo odaberite PDF, ne folder.")
             return
+
         if not path.exists():
             self.show_error("Datoteka ne postoji.")
             self.populate_pdf_tree()
             return
+
         open_file_with_default_app(str(path))
 
     def on_edit_invoice(self, widget):
@@ -567,7 +667,6 @@ class InvoiceWindow(Gtk.Window):
             with open(json_path, "r", encoding="utf-8") as jf:
                 data = json.load(jf)
 
-            # Populate form fields
             self.invoice_number_entry.set_text(data.get("invoice_number", ""))
             self.date_entry.set_text(data.get("invoice_date", "").split()[0])
             self.time_entry.set_text(data.get("invoice_time", ""))
@@ -579,7 +678,6 @@ class InvoiceWindow(Gtk.Window):
             self.client_entries["Poštanski broj"].set_text(data.get("postal_code", ""))
             self.client_entries["Grad"].set_text(data.get("city", ""))
 
-            # Clear current items
             for row in list(self.items_listbox.get_children()):
                 self.items_listbox.remove(row)
 
@@ -593,15 +691,13 @@ class InvoiceWindow(Gtk.Window):
             self.show_error(f"Greška prilikom učitavanja: {e}")
 
     def show_error(self, message):
-        dialog = Gtk.MessageDialog(
-            parent=self,
-            flags=0,
-            message_type=Gtk.MessageType.ERROR,
-            buttons=Gtk.ButtonsType.OK,
-            text=message
-        )
-        dialog.run()
-        dialog.destroy()
+        dlg = Gtk.MessageDialog(parent=self,
+                                flags=0,
+                                message_type=Gtk.MessageType.ERROR,
+                                buttons=Gtk.ButtonsType.OK,
+                                text=message)
+        dlg.run()
+        dlg.destroy()
 
 
 if __name__ == "__main__":
