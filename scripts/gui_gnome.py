@@ -19,6 +19,15 @@ def open_file_with_default_app(filepath):
     else:
         subprocess.run(["xdg-open", filepath])
 
+def open_folder_in_file_manager(folder_path):
+    """Open the specified folder in the system's default file manager"""
+    if platform.system() == "Windows":
+        os.startfile(folder_path)
+    elif platform.system() == "Darwin":
+        subprocess.run(["open", folder_path])
+    else:
+        subprocess.run(["xdg-open", folder_path])
+
 class InvoiceWindow(Gtk.Window):
     def __init__(self):
         super().__init__(title="Kreiranje računa")
@@ -38,7 +47,6 @@ class InvoiceWindow(Gtk.Window):
 
         self._build_ui()
         self.populate_invoice_meta()
-        self.populate_pdf_tree()
 
     def _load_naselja_and_ulice(self):
         base_path = Path(__file__).resolve().parent.parent / "database"
@@ -70,7 +78,7 @@ class InvoiceWindow(Gtk.Window):
         self._build_dates_section()
         self._build_client_and_items_section()
         self._build_generate_button()
-        self._build_pdf_preview_section()
+        self._build_open_folder_button()
 
         # Setup client name completion AFTER client_entries dict initialized
         client_name_entry = self.client_entries.get("Naziv / Ime i prezime")
@@ -134,13 +142,13 @@ class InvoiceWindow(Gtk.Window):
         client_label.set_xalign(0)
         client_vbox.pack_start(client_label, False, False, 6)
 
-        # INSERT clear button here:
+        # Clear button
         clear_btn = Gtk.Button(label="Očisti polja kupca")
         clear_btn.set_tooltip_text("Očisti Naziv / Ime i prezime, Poštanski broj, OIB, Grad i Adresu")
         clear_btn.connect("clicked", self.on_clear_client_fields)
         client_vbox.pack_start(clear_btn, False, False, 6)
 
-        # Then add the grid and other widgets as before
+        # Grid for client fields
         grid = Gtk.Grid(column_spacing=12, row_spacing=6)
         client_vbox.pack_start(grid, True, True, 0)
 
@@ -239,31 +247,10 @@ class InvoiceWindow(Gtk.Window):
         btn.connect("clicked", self.on_generate_invoice)
         self.vbox.pack_start(btn, False, False, 12)
 
-    def _build_pdf_preview_section(self):
-        label = Gtk.Label()
-        label.set_markup("<span font='18' foreground='#5C6BC0'>Svi generirani računi</span>")
-        label.set_xalign(0)
-        self.vbox.pack_start(label, False, False, 12)
-
-        self.pdfs_store = Gtk.TreeStore(str, str)
-
-        self.pdfs_treeview = Gtk.TreeView(model=self.pdfs_store)
-        renderer = Gtk.CellRendererText()
-        col = Gtk.TreeViewColumn("Računi", renderer, text=0)
-        self.pdfs_treeview.append_column(col)
-
-        scrolled = Gtk.ScrolledWindow()
-        scrolled.set_min_content_height(150)
-        scrolled.add(self.pdfs_treeview)
-        self.vbox.pack_start(scrolled, True, True, 0)
-
-        preview_btn = Gtk.Button(label="Pregledaj odabrani PDF")
-        preview_btn.get_style_context().add_class("suggested-action")
-        preview_btn.connect("clicked", self.on_preview_pdf)
-        self.vbox.pack_start(preview_btn, False, False, 6)
-
-        edit_btn = Gtk.Button(label="Uredi odabrani račun")
-        edit_btn.connect("clicked", self.on_edit_invoice)
+    def _build_open_folder_button(self):
+        edit_btn = Gtk.Button(label="Učitaj postojeći račun za uređivanje")
+        edit_btn.set_tooltip_text("Odaberi PDF račun za uređivanje")
+        edit_btn.connect("clicked", self.on_select_invoice_for_editing)
         self.vbox.pack_start(edit_btn, False, False, 6)
 
     # ------------------ Callback handlers ---------------------
@@ -425,6 +412,19 @@ class InvoiceWindow(Gtk.Window):
             if entry:
                 entry.set_text("")
 
+    def on_open_invoices_folder(self, widget):
+        """Open the OUTPUT_DIR folder in the system's default file manager"""
+        output_path = Path(OUTPUT_DIR)
+        
+        if not output_path.exists():
+            # Create the directory if it doesn't exist
+            output_path.mkdir(parents=True, exist_ok=True)
+        
+        try:
+            open_folder_in_file_manager(str(output_path))
+        except Exception as e:
+            self.show_error(f"Greška pri otvaranju mape: {e}")
+
     def on_generate_invoice(self, widget):
         data = self._collect_invoice_data()
         if not data:
@@ -487,7 +487,6 @@ class InvoiceWindow(Gtk.Window):
             dialog.destroy()
 
             open_file_with_default_app(str(final_pdf_path))
-            self.populate_pdf_tree()
 
         except Exception as e:
             self.show_error(f"Neočekivana greška: {e}")
@@ -612,53 +611,47 @@ class InvoiceWindow(Gtk.Window):
             self._save_clients()
             self.client_name_store.append([context["client_name"]])
 
-    def populate_pdf_tree(self):
-        self.pdfs_store.clear()
-        base = Path(OUTPUT_DIR)
-        if not base.exists():
-            return
+    def on_select_invoice_for_editing(self, widget):
+        """Open file dialog to select an invoice PDF for editing"""
+        dialog = Gtk.FileChooserDialog(
+            title="Odaberite račun za uređivanje",
+            parent=self,
+            action=Gtk.FileChooserAction.OPEN
+        )
+        dialog.add_buttons(
+            Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
+            Gtk.STOCK_OPEN, Gtk.ResponseType.OK
+        )
+        
+        # Set default folder to OUTPUT_DIR
+        output_path = Path(OUTPUT_DIR)
+        if output_path.exists():
+            dialog.set_current_folder(str(output_path))
+        
+        # Add filter for PDF files
+        filter_pdf = Gtk.FileFilter()
+        filter_pdf.set_name("PDF računi")
+        filter_pdf.add_pattern("*.pdf")
+        dialog.add_filter(filter_pdf)
+        
+        response = dialog.run()
+        
+        if response == Gtk.ResponseType.OK:
+            pdf_path = Path(dialog.get_filename())
+            self._load_invoice_for_editing(pdf_path)
+        
+        dialog.destroy()
 
-        for year_folder in sorted(base.iterdir()):
-            if not year_folder.is_dir() or year_folder.name.startswith("._invoice_data"):
-                continue
-
-            parent_iter = self.pdfs_store.append(None, [year_folder.name, str(year_folder)])
-            for pdf_file in sorted(year_folder.glob("*.pdf")):
-                self.pdfs_store.append(parent_iter, [pdf_file.name, str(pdf_file)])
-
-    def on_preview_pdf(self, widget):
-        selection = self.pdfs_treeview.get_selection()
-        model, tree_iter = selection.get_selected()
-        if tree_iter is None:
-            self.show_error("Molimo odaberite PDF za pregled.")
-            return
-
-        path = Path(model[tree_iter][1])
-        if path.is_dir():
-            self.show_error("Molimo odaberite PDF, ne folder.")
-            return
-
-        if not path.exists():
+    def _load_invoice_for_editing(self, pdf_path):
+        """Load invoice data from JSON and populate the form"""
+        if not pdf_path.exists():
             self.show_error("Datoteka ne postoji.")
-            self.populate_pdf_tree()
             return
 
-        open_file_with_default_app(str(path))
-
-    def on_edit_invoice(self, widget):
-        selection = self.pdfs_treeview.get_selection()
-        model, tree_iter = selection.get_selected()
-        if tree_iter is None:
-            self.show_error("Molimo odaberite račun za uređivanje.")
-            return
-
-        pdf_path = Path(model[tree_iter][1])
-        if pdf_path.is_dir():
-            self.show_error("Molimo odaberite PDF, ne folder.")
-            return
-
+        # Find corresponding JSON file
         year_folder = pdf_path.parent.name
         json_path = Path(OUTPUT_DIR) / "._invoice_data" / year_folder / pdf_path.name.replace(".pdf", ".json")
+        
         if not json_path.exists():
             self.show_error("Podaci za uređivanje nisu pronađeni.")
             return
@@ -667,33 +660,46 @@ class InvoiceWindow(Gtk.Window):
             with open(json_path, "r", encoding="utf-8") as jf:
                 data = json.load(jf)
 
+            # Populate form fields
             self.invoice_number_entry.set_text(data.get("invoice_number", ""))
             self.date_entry.set_text(data.get("invoice_date", "").split()[0])
             self.time_entry.set_text(data.get("invoice_time", ""))
             self.due_entry.set_text(data.get("due_date", ""))
 
+            # Set invoice type
+            if data.get("invoice_type", "") == "R1":
+                self.invoice_type_combo.set_active(1)  # r1
+            else:
+                self.invoice_type_combo.set_active(0)  # obican
+
+            # Populate client fields
             self.client_entries["Naziv / Ime i prezime"].set_text(data.get("client_name", ""))
             self.client_entries["OIB"].set_text(data.get("oib", ""))
             self.client_entries["Adresa"].set_text(data.get("address", ""))
             self.client_entries["Poštanski broj"].set_text(data.get("postal_code", ""))
             self.client_entries["Grad"].set_text(data.get("city", ""))
 
+            # Clear existing items
             for row in list(self.items_listbox.get_children()):
                 self.items_listbox.remove(row)
 
+            # Populate items
             for item in data.get("items", []):
-                self.new_item_name.set_text(item["name"])
-                self.new_item_qty.set_text(str(item["quantity"]))
-                self.new_item_price.set_text(str(item["unit_price"]))
-                self.on_add_item(None)
+                self._add_item_row(
+                    item["name"], 
+                    str(item["quantity"]).replace(".", ","),  # Convert back to Croatian format
+                    str(item["unit_price"]).replace(".", ",")  # Convert back to Croatian format
+                )
+
+            self.show_info(f"Učitan račun: {pdf_path.name}")
 
         except Exception as e:
             self.show_error(f"Greška prilikom učitavanja: {e}")
 
-    def show_error(self, message):
+    def show_info(self, message):
         dlg = Gtk.MessageDialog(parent=self,
                                 flags=0,
-                                message_type=Gtk.MessageType.ERROR,
+                                message_type=Gtk.MessageType.INFO,
                                 buttons=Gtk.ButtonsType.OK,
                                 text=message)
         dlg.run()
