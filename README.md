@@ -110,3 +110,28 @@ Verify `soffice` CLI is functional:
 
 Thank you for using the Invoice Generator app!  
 If you encounter any issues, please raise them in the project repository.
+
+
+## Python Dependencies
+
+The project requires the following Python packages:
+
+- jinja2
+- PyGObject (also known as `gi` module)
+
+For packaging and distribution (optional):
+
+- setuptools
+- py2app (for macOS)
+
+You can install the required packages using pip:
+
+```bash
+pip install jinja2 PyGObject
+```
+
+For packaging on macOS, install the optional packages:
+
+```bash
+pip install setuptools py2app
+```
