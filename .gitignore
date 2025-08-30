@@ -1,2 +1,24 @@
-/output/
-/database/
+# Virtual environment
+venv/
+.venv/
+
+# Output and temp files
+output/
+temp/
+*.log
+
+# macOS system files
+.DS_Store
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Python egg metadata
+*.egg-info/
+.eggs/
+
+# Editor folders
+.vscode/
