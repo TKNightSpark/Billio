@@ -1,67 +1,59 @@
 #!/bin/bash
 
-# Kompleksna instalacijska skripta za macOS za InvoiceProject aplikaciju.
-# - Proverava i instalira Homebrew (ako treba)
-# - Instalira sistemske zavisnosti potrebne za PyGObject i GTK
-# - Kreira i aktivira Python virtuelno okruženje (venv)
-# - Instalira Python zahteve iz requirements.txt
-# - Pokreće glavnu GUI aplikaciju
+# Complex installation script for macOS for the InvoiceProject application.
+# - Checks and installs Homebrew (if needed)
+# - Installs system dependencies required for PyGObject and GTK
+# - Creates and activates Python virtual environment (venv)
+# - Installs Python requirements from requirements.txt
+# - Installs PyObjC for macOS-specific features
+# - Runs the main GUI application
 
 cd "$(dirname "$0")"
 
-# Funkcija za provjeru postojanja komande
+# Function to check if a command exists
 command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
-echo "Dobrodošli u instalacijsku skriptu za Billio aplikaciju."
+echo "Welcome to the InvoiceProject installation script."
 
-# Korak 1: Instalacija Homebrew ako nije instaliran
+# Step 1: Install Homebrew if not installed
 if ! command_exists brew; then
-    echo "Homebrew nije pronađen. Instaliram Homebrew..."
+    echo "Homebrew not found. Installing Homebrew..."
     /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-    # Dodavanje Homebrew u PATH za trenutnu sesiju (Apple Silicon i Intel)
+    # Add Homebrew to PATH for current session (Apple Silicon and Intel)
     eval "$(/opt/homebrew/bin/brew shellenv)" || true
     eval "$(/usr/local/bin/brew shellenv)" || true
 else
-    echo "Homebrew je već instaliran."
+    echo "Homebrew is already installed."
 fi
 
-# Korak 2: Instalacija potrebnih sistema paketa putem Homebrew
-echo "Instaliram potrebne sistemske biblioteke (gtk+3, pygobject3, gobject-introspection, cairo, pkg-config)..."
+# Step 2: Install required system packages via Homebrew
+echo "Installing required system libraries (gtk+3, pygobject3, gobject-introspection, cairo, pkg-config)..."
 brew install gtk+3 pygobject3 gobject-introspection cairo pkg-config
 
-# Korak 3: Kreiranje i aktivacija virtuelnog okruženja
+# Step 3: Create and activate virtual environment
 if [ ! -d "venv" ]; then
-    echo "Kreiranje virtuelnog okruženja 'venv'..."
+    echo "Creating virtual environment 'venv'..."
     python3 -m venv venv
 else
-    echo "Virtuelno okruženje 'venv' već postoji."
+    echo "Virtual environment 'venv' already exists."
 fi
 
-echo "Aktivacija virtuelnog okruženja..."
+echo "Activating virtual environment..."
 source venv/bin/activate
 
-# Korak 4: Instalacija Python zavisnosti
-echo "Instalacija Python paketa iz requirements.txt..."
+# Step 4: Install Python dependencies
+echo "Installing Python packages from requirements.txt..."
 pip install --upgrade pip
 pip install -r requirements.txt
 
-# Korak 5: Pokretanje GUI aplikacije
-echo "Pokretanje aplikacije gui_gnome.py..."
+# Step 5: Install PyObjC for macOS Dock icon support
+echo "Installing PyObjC for macOS-specific functionality..."
+pip install pyobjc
+
+# Step 6: Run the GUI application
+echo "Starting the gui_gnome.py application..."
 python3 scripts/gui_gnome.py
 
-echo "Kraj skripte. Hvala što koristite InvoiceProject!"
-"""
-
-# Snimam kompletnu skriptu kao setup_full.sh unutar projekta
-full_setup_path = os.path.join(extract_path_v2, 'InvoiceProject', 'setup_full.sh')
-with open(full_setup_path, 'w', encoding='utf-8') as f:
-    f.write(complete_setup_script)
-
-# Podešavanje permisija
-os.chmod(full_setup_path, 0o755)
-
-full_setup_path
-
-'/mnt/data/InvoiceProject_v2/InvoiceProject/setup_full.sh'
+echo "Script finished. Thank you for using InvoiceProject!"

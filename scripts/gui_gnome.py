@@ -5,6 +5,9 @@ from gi.repository import Gtk, Gdk
 from datetime import datetime, timedelta
 from pathlib import Path
 import subprocess, platform, os, shutil
+import os
+from pathlib import Path
+import sys
 
 from utilis import (
     round_down_hour, render_odt_template, convert_to_pdf,
@@ -30,10 +33,34 @@ def open_folder_in_file_manager(folder_path):
 
 class InvoiceWindow(Gtk.Window):
     def __init__(self):
-        super().__init__(title="Kreiranje računa")
+        super().__init__(title="Billio")
 
         settings = Gtk.Settings.get_default()
         settings.set_property("gtk-application-prefer-dark-theme", True)
+
+        project_root = Path(__file__).resolve().parent.parent
+
+        icon_png_path = project_root / "static" / "billio.png"
+        icon_icns_path = project_root / "static" / "billio.icns"
+
+        # Set GTK window icon from PNG (works cross-platform)
+        if icon_png_path.exists():
+            self.set_icon_from_file(str(icon_png_path))
+        else:
+            print(f"PNG Icon not found at: {icon_png_path}")
+
+        # macOS Dock icon from ICNS using AppKit
+        if sys.platform == 'darwin':
+            try:
+                from AppKit import NSApplication, NSImage
+                app = NSApplication.sharedApplication()
+                if icon_icns_path.exists():
+                    image = NSImage.alloc().initByReferencingFile_(str(icon_icns_path))
+                    app.setApplicationIconImage_(image)
+                else:
+                    print(f"ICNS Icon not found at: {icon_icns_path}")
+            except ImportError:
+                print("PyObjC (AppKit) not installed; Dock icon won't be set on macOS.")
 
         self.set_default_size(900, 650)
         self.set_border_width(0)  # Remove default border for cleaner look
@@ -43,8 +70,8 @@ class InvoiceWindow(Gtk.Window):
 
         # Main container with padding
         main_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        main_container.set_margin_left(16)
-        main_container.set_margin_right(16)
+        main_container.set_margin_start(16)
+        main_container.set_margin_end(16)
         main_container.set_margin_top(16)
         main_container.set_margin_bottom(16)
         self.add(main_container)
