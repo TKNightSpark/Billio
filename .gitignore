@@ -1,21 +1,21 @@
-# Python virtual env
-venv/
-.venv/
+# macOS system files
+.DS_Store
 
-# Bytecode, caches
+# Python cache
 __pycache__/
 *.py[cod]
 *$py.class
 
-# macOS system files
-.DS_Store
+# Virtual environments
+venv/
+.venv/
 
-# Output/generated files
+# Logs & temp
+*.log
 output/
 temp/
-*.log
 
-# Editor files
+# Editors
 .vscode/
 
 # Misc
